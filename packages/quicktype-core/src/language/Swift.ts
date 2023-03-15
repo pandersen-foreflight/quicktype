@@ -75,6 +75,7 @@ export const swiftOptions = {
     ),
     optionalEnums: new BooleanOption("optional-enums", "If no matching case is found enum value is set to null", false),
     swift5Support: new BooleanOption("swift-5-support", "Renders output in a Swift 5 compatible mode", false),
+    observableObject: new BooleanOption("observable-objects", "Make objects observable and variables published", false),
     multiFileOutput: new BooleanOption(
         "multi-file-output",
         "Renders each top-level object in its own Swift file",
@@ -151,7 +152,8 @@ export class SwiftTargetLanguage extends TargetLanguage {
             swiftOptions.optionalEnums,
             swiftOptions.swift5Support,
             swiftOptions.multiFileOutput,
-            swiftOptions.mutableProperties
+            swiftOptions.mutableProperties,
+            swiftOptions.observableObject
         ];
     }
 
@@ -487,7 +489,7 @@ export class SwiftRenderer extends ConvenienceRenderer {
         } else if (!this._options.justTypes) {
             if (this._options.multiFileOutput) {
                 this.emitLineOnce(
-                    "// This file was generated from JSON Schema using quicktype, do not modify it directly."
+                    "// This file was generated from JSON Schema using quicktype, do not modify it directly. XXX dasds"
                 );
                 this.emitLineOnce("// To parse the JSON, add this file to your project and do:");
                 this.emitLineOnce("//");
@@ -559,6 +561,11 @@ export class SwiftRenderer extends ConvenienceRenderer {
         if (this._options.protocol.equatable) {
             protocols.push("Equatable");
         }
+
+        if (this._options.observableObject) {
+            protocols.push("ObservableObject")
+        }
+
         return protocols;
     }
 
@@ -635,7 +642,8 @@ export class SwiftRenderer extends ConvenienceRenderer {
     protected propertyLinesDefinition(name: Name, parameter: ClassProperty): Sourcelike {
         const useMutableProperties = this._options.mutableProperties;
         return [
-            this.accessLevel,
+            this._options.observableObject ? "@Published " : "",
+            this._options.observableObject ? "public " : this.accessLevel,
             useMutableProperties ? "var " : "let ",
             name,
             ": ",
@@ -742,6 +750,32 @@ export class SwiftRenderer extends ConvenienceRenderer {
                         }
                     });
                 }
+
+                if (this._options.observableObject) {
+                    this.ensureBlankLine()
+                    let accessLevel = this._options.accessLevel
+                    this.emitBlock(accessLevel + " func encode(to encoder: Encoder) throws", () => {
+                        this.emitLine("var container = encoder.container(keyedBy: CodingKeys.self)")
+
+                        this.forEachClassProperty(c, "none", (name) => {
+                            this.emitLine("try container.encodeIfPresent(self.", name, ", forKey: .", name, ")")
+                        });
+                    });
+
+                    this.ensureBlankLine()
+                    this.emitBlock("required " + accessLevel + " init(from decoder: Decoder) throws", () => {
+                        this.emitLine("let container = try decoder.container(keyedBy: CodingKeys.self)")
+
+                        this.forEachClassProperty(c, "none", (name, _, p) => {
+                            if (p.isOptional) {
+                                this.emitLine("self.", name, " = try container.decodeIfPresent(", this.swiftType(p.type, false, true), ".self, forKey: .", name, ")")
+                            } else {
+                                this.emitLine("self.", name, " = try container.decode(", this.swiftType(p.type, false, true), ".self, forKey: .", name, ")")
+                            }
+                        });
+                    });
+                }
+
             }
 
             // this main initializer must be defined within the class
@@ -1056,6 +1090,9 @@ encoder.dateEncodingStrategy = .formatted(formatter)`);
             '"))'
         );
     }
+
+
+
 
     private emitSupportFunctions4 = (): void => {
         this.startFile("JSONSchemaSupport");
