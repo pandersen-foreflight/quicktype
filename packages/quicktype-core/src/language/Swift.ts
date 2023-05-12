@@ -968,7 +968,12 @@ encoder.dateEncodingStrategy = .formatted(formatter)`);
 
         const protocols: string[] = [];
         if (!this._options.justTypes) {
-            protocols.push("String"); // Not a protocol
+            if (this._options.objcSupport) {
+                protocols.push("Int"); // Not a protocol
+                protocols.push("RawRepresentable");
+            } else {
+                protocols.push("String"); // Not a protocol
+            }
             protocols.push("Codable");
         }
 
@@ -993,6 +998,19 @@ encoder.dateEncodingStrategy = .formatted(formatter)`);
                 this.forEachEnumCase(e, "none", (name, jsonName) => {
                     this.emitLine("case ", name, ' = "', stringEscape(jsonName), '"');
                 });
+                if(this._options.objcSupport) {
+                    
+                    this.emitLine("public typealias RawValue = String")
+
+                    this.emitBlockWithAccess(["var rawValue: RawValue"], () => {
+                        this.emitLine("switch self {")
+                        this.forEachEnumCase(e, "none", (name, jsonName) => {
+                            this.emitLine("case .", name, ':')
+                            this.emitLine('\treturn "', stringEscape(jsonName), '"');
+                        });
+                        this.emitLine("}")
+                    });
+                }
             });
         }
 
