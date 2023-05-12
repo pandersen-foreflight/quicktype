@@ -398,13 +398,17 @@ export class SwiftRenderer extends ConvenienceRenderer {
 
     protected swiftPropertyType(p: ClassProperty): Sourcelike {
         if (p.isOptional || (this._options.optionalEnums && p.type.kind === "enum")) {
-            return [this.swiftType(p.type, true, true), "?"];
+            return [this.swiftType(p.type, true, true, true), "?"];
         } else {
-            return this.swiftType(p.type, true);
+            return this.swiftType(p.type, true, false, true);
         }
     }
 
-    protected swiftType(t: Type, withIssues = false, noOptional = false): Sourcelike {
+    protected swiftType(
+        t: Type, withIssues = false,
+        noOptional = false,
+        useNSNumber = false
+    ): Sourcelike {
         const optional = noOptional ? "" : "?";
         return matchType<Sourcelike>(
             t,
@@ -426,7 +430,7 @@ export class SwiftRenderer extends ConvenienceRenderer {
             },
             _boolType => "Bool",
             _integerType => "Int",
-            _doubleType => "Double",
+            _doubleType => useNSNumber ? "NSNumber" : "Double",
             _stringType => "String",
             arrayType => ["[", this.swiftType(arrayType.items, withIssues), "]"],
             classType => this.nameForNamedType(classType),
@@ -757,8 +761,14 @@ export class SwiftRenderer extends ConvenienceRenderer {
                     this.emitBlock(accessLevel + " func encode(to encoder: Encoder) throws", () => {
                         this.emitLine("var container = encoder.container(keyedBy: CodingKeys.self)")
 
-                        this.forEachClassProperty(c, "none", (name) => {
-                            this.emitLine("try container.encodeIfPresent(self.", name, ", forKey: .", name, ")")
+                        this.forEachClassProperty(c, "none", (name, _, p) => {
+                            var type = this.swiftType(p.type, false, true, this._options.objcSupport)
+                            if (type == "NSNumber") {
+                                const optional = p.isOptional ? "?" : ""
+                                this.emitLine("try container.encodeIfPresent(self.", name, optional, ".doubleValue, forKey: .", name, ")")
+                            } else {
+                                this.emitLine("try container.encodeIfPresent(self.", name, ", forKey: .", name, ")")
+                            }
                         });
                     });
 
@@ -767,10 +777,25 @@ export class SwiftRenderer extends ConvenienceRenderer {
                         this.emitLine("let container = try decoder.container(keyedBy: CodingKeys.self)")
 
                         this.forEachClassProperty(c, "none", (name, _, p) => {
+                            const useNSNumber = this._options.objcSupport
                             if (p.isOptional) {
-                                this.emitLine("self.", name, " = try container.decodeIfPresent(", this.swiftType(p.type, false, true), ".self, forKey: .", name, ")")
+
+                                var type = this.swiftType(p.type, false, true, useNSNumber)
+                                if (type == "NSNumber") {
+                                    this.emitLine("if let ", name, "_double = try container.decodeIfPresent(Double.self, forKey: .", name, ") {")
+                                    this.emitLine("\tself.", name, " = NSNumber(value: ", name, "_double)")
+                                    this.emitLine("}")
+                                } else {
+                                    this.emitLine("self.", name, " = try container.decodeIfPresent(", this.swiftType(p.type, false, true), ".self, forKey: .", name, ")")
+                                }
                             } else {
-                                this.emitLine("self.", name, " = try container.decode(", this.swiftType(p.type, false, true), ".self, forKey: .", name, ")")
+                                var type = this.swiftType(p.type, false, true, useNSNumber)
+                                if (type == "NSNumber") {
+                                    this.emitLine("let ", name, "_double = try container.decode(Double.self, forKey: .", name, ")")
+                                    this.emitLine("self.", name, " = NSNumber(value: ", name, "_double)")
+                                } else {
+                                    this.emitLine("self.", name, " = try container.decode(", this.swiftType(p.type, false, true), ".self, forKey: .", name, ")")
+                                }
                             }
                         });
                     });
