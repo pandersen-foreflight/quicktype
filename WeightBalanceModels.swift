@@ -7,8 +7,8 @@
 import Foundation
 
 public enum WBEnumTest: Int, RawRepresentable, Codable {
-    case a = "A"
-    case b = "B"
+    case a
+    case b
     public typealias RawValue = String
     public var rawValue: RawValue {
         switch self {
@@ -18,11 +18,21 @@ public enum WBEnumTest: Int, RawRepresentable, Codable {
         	return "B"
         }
     }
+    public public init?(rawValue: String) {
+        switch rawValue {
+        case "A":
+        	return .a
+        case "B":
+        	return .b
+        default:
+        	return nil
+        }
+    }
 }
 
 public enum WBEnumTest2: Int, RawRepresentable, Codable {
-    case a2 = "A2"
-    case b2 = "B2"
+    case a2
+    case b2
     public typealias RawValue = String
     public var rawValue: RawValue {
         switch self {
@@ -30,6 +40,16 @@ public enum WBEnumTest2: Int, RawRepresentable, Codable {
         	return "A2"
         case .b2:
         	return "B2"
+        }
+    }
+    public public init?(rawValue: String) {
+        switch rawValue {
+        case "A2":
+        	return .a2
+        case "B2":
+        	return .b2
+        default:
+        	return nil
         }
     }
 }

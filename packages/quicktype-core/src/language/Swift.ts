@@ -995,11 +995,11 @@ encoder.dateEncodingStrategy = .formatted(formatter)`);
             });
         } else {
             this.emitBlockWithAccess(["enum ", enumName, protocolString], () => {
-                this.forEachEnumCase(e, "none", (name, jsonName) => {
-                    this.emitLine("case ", name, ' = "', stringEscape(jsonName), '"');
+                this.forEachEnumCase(e, "none", (name) => {
+                    this.emitLine("case ", name);
                 });
-                if(this._options.objcSupport) {
-                    
+                if (this._options.objcSupport) {
+
                     this.emitLine("public typealias RawValue = String")
 
                     this.emitBlockWithAccess(["var rawValue: RawValue"], () => {
@@ -1008,6 +1008,17 @@ encoder.dateEncodingStrategy = .formatted(formatter)`);
                             this.emitLine("case .", name, ':')
                             this.emitLine('\treturn "', stringEscape(jsonName), '"');
                         });
+                        this.emitLine("}")
+                    });
+
+                    this.emitBlockWithAccess(["public init?(rawValue: String)"], () => {
+                        this.emitLine("switch rawValue {")
+                        this.forEachEnumCase(e, "none", (name, jsonName) => {
+                            this.emitLine("case \"", jsonName, '\":')
+                            this.emitLine('\treturn .', name, '');
+                        });
+                        this.emitLine("default:")
+                        this.emitLine('\treturn nil');
                         this.emitLine("}")
                     });
                 }
